@@ -14,6 +14,7 @@ library(e1071)
 library(tidyr)
 library(moments)
 library(ggplot2)
+library(EnvStats)
 
 
 # Import data
@@ -39,7 +40,7 @@ drill_prices$Year <- format(as.Date(drill_prices$datetime, origin="1899-12-30"),
 
 #Create new data set containing the variables I want
 drill_prices_2 <- drill_prices %>%
-  select(c(-datenum, -datetime))
+  select(-datetime)
 View(drill_prices_2)
 
 #Only values from 1990-2006
@@ -93,6 +94,8 @@ costs <- drill_prices_3%>%
 
 #Take average price for each year
 View(costs)
+costs$avg <- (costs$`Dry Well Cost (Thousands)` + costs$`Natural Gas Cost (Thousands)` + costs$`Crude Oil Cost (Thousands)`)/3
+#2006 avgerage is 2279.8
 
 #Create Histogram
 hist(differences_aggregate$value)
@@ -113,32 +116,76 @@ qqline(differences_aggregate$value, col='red')
 
 #Set the seed
 set.seed(11939)
-r <- rnorm(10000, mean=0.1277, sd=0.1741)
+# r <- rnorm(10000, mean=0.1277, sd=0.1741)
+# 
+# 
+# #Let's just look at Crude Oil for now...
+# P2006 <- 2664.6
+# P2007 <- P2006*(1+r)
+# 
+# mean(P2007)
+# sd(P2007)
 
-
-#Let's just look at Crude Oil for now...
-P2006 <- 2664.6
-P2007 <- P2006*(1+r)
-
-mean(P2007)
-sd(P2007)
-
+#One Year out
 hist(P2007, breaks=50, main='One Year Value Distribution', xlab='Final Value')
 abline(v = 2664.6, col="red", lwd=2)
 mtext("Initial Inv.", at=2664.6, col="red")
 
-Density.P2007 <- density(P2007, bw="SJ-ste") #this is not the default in R, but is a good choice
-Density.P2007
-#Bandwidth = 74.62
+typeof(differences_aggregate$value)
+as.numeric(differences_aggregate$value)
+
+Density.diff <- density(differences_aggregate$value, bw="SJ-ste") #this is not the default in R, but is a good choice
+Density.diff
+#Bandwidth = 0.07494
 
 # Use bandwidth from the density function above and input for h
-Est.P2007 <- rkde(fhat=kde(P1, h=74.62), n=10000) #What's n?
-hist(Est.P2007, breaks=50, main='Estimated One Year Value Distribution', xlab='Final Value')
-mean(Est.P2007)
-sd(Est.P2007)
+Est.diff <- rkde(fhat=kde(differences_aggregate$value, h=0.07494), n=1) #What's n?
+hist(Est.diff, breaks=50, main='Estimated One Year Value Distribution', xlab='Final Value')
+mean(Est.diff)
+sd(Est.diff)
 # 
 # # Multiple Input Probability Distributions #
-library(EnvStats)
+
+
+######################
+# Normal distributions
+######################
+#Avgerage of all
+#Repeat 10000 times
+Prep <- rep(0,10000)
+
+for(i in 0:10000){
+  #Initialize Pt
+  Pt <- 2279.8
+  
+  #Simulate Pt to get predictions for 2019
+  for(j in 1:6){
+    Pt
+    r <- rnorm(n=1, mean=0.1277, sd=0.1741)
+    Pt <- Pt*(1 + r)
+  }
+  for(k in 1:3){
+    Pt
+    r <- rtri(n=1, min=-0.22, max=-0.07, mode=-0.0917)
+    Pt <- Pt*(1+r)
+  }
+  for (l in 1:4) {
+    Pt
+    r <- rtri(n=1, min=0.02, max=0.06, mode=0.05)
+    Pt <- Pt*(1+r)
+  }
+  Prep[i] <- Pt
+}
+
+
+mean(Prep)
+sd(Prep)
+
+hist(Prep, breaks=50, main='2019 Cost Prediction Distribution', xlab='Final Value')
+abline(v = 2279.8, col="red", lwd=2)
+mtext("Initial Inv.", at=2279.8, col="red")
+
+# View(Prep)
 
 #Dry Well
 #Repeat 10000 times
@@ -247,4 +294,47 @@ sd(Prep3)
 hist(Prep3, breaks=50, main='13 Year Value Distribution-Crude Oil', xlab='Final Value')
 abline(v = 2238.6, col="red", lwd=2)
 mtext("Initial Inv.", at=2238.6, col="red")
+
+
+
+######################
+# Kernel Estimation 
+######################
+
+rkde(fhat=kde(differences_aggregate$value, h=0.07494), n=1)
+
+#Crude Oil
+#Repeat 10000 times
+Prep4 <- rep(0,10000)
+
+for(i in 0:10000){
+  #Initialize Pt
+  Pt <- 2279.8
+  
+  #Simulate Pt to get predictions for 2019
+  for(j in 1:6){
+    Pt
+    r <- rkde(fhat=kde(differences_aggregate$value, h=0.07494), n=1)
+    Pt <- Pt*(1 + r)
+  }
+  for(k in 1:3){
+    Pt
+    r <- rtri(n=1, min=-0.22, max=-0.07, mode=-0.0917)
+    Pt <- Pt*(1+r)
+  }
+  for (l in 1:4) {
+    Pt
+    r <- rtri(n=1, min=0.02, max=0.06, mode=0.05)
+    Pt <- Pt*(1+r)
+  }
+  Prep4[i] <- Pt
+}
+
+
+mean(Prep4)
+sd(Prep4)
+
+hist(Prep4, breaks=50, main='2019 Cost Prediction Distribution', xlab='Final Value')
+abline(v = 2279.8, col="red", lwd=2)
+mtext("Initial Inv.", at=2279.8, col="red")
 
