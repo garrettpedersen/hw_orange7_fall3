@@ -1,0 +1,250 @@
+###########################################
+# Simulation and Risk HW 1 
+###########################################
+
+#Install necessary packages and libraries 
+install.packages('graphics')
+install.packages('ks')
+install.packages('e1071')
+library(graphics)
+library(ks)
+library(openxlsx)
+library(dplyr)
+library(e1071)
+library(tidyr)
+library(moments)
+library(ggplot2)
+
+
+# Import data
+drill_prices <- read.xlsx('/Users/Garrett/Desktop/MSA Fall/Fall 3/Simulation and Risk/HW/Data/Simulation Data HW 1.xlsx', sheet = 4)
+View(drill_prices)
+typeof(drill_prices$Date)
+
+#Change column names 
+colnames(drill_prices) <- c('datetime', 'Crude Oil Cost (Thousands)', 'Natural Gas Cost (Thousands)', 'Dry Well Cost (Thousands)', 'Crude Oil Arithmetic Return', 'Natural Gas Arithmetic Return', 'Dry Well Arithmetic Return')
+
+#Change dates to years
+Date <- as.Date(drill_prices$datetime,'%m/%d/%Y') 
+#Find the distribution of growth over the years 1990-2006
+
+
+# s <- 22097
+# for (i in 1:47) {
+#   drill_prices$datenum <- (s+365*(i-1))
+# }
+
+#Extract year from the datetime variable
+drill_prices$Year <- format(as.Date(drill_prices$datetime, origin="1899-12-30"),"%Y")
+
+#Create new data set containing the variables I want
+drill_prices_2 <- drill_prices %>%
+  select(c(-datenum, -datetime))
+View(drill_prices_2)
+
+#Only values from 1990-2006
+drill_prices_3 <- drill_prices_2[30:47,]
+
+#In order to simulate possible drilling costs, I need to know the distribution of 
+#changes over the last several years. To do this, I must create a histogram and 
+#measure the skewness and kurtosis of the histogram. Moreover, I should overlay
+#the kernel and the normal curve on the histogram for comparison purposes. Also, 
+#QQplots...
+
+
+#Create percent change variable 
+#Crude Oil
+drill_prices_3$crude_per_diff <- lag((lead(drill_prices_3$`Crude Oil Cost (Thousands)`)-drill_prices_3$`Crude Oil Cost (Thousands)`)/drill_prices_3$`Crude Oil Cost (Thousands)`)
+
+#Natural Gas
+drill_prices_3$gas_per_diff <- lag((lead(drill_prices_3$`Natural Gas Cost (Thousands)`)-drill_prices_3$`Natural Gas Cost (Thousands)`)/drill_prices_3$`Natural Gas Cost (Thousands)`)
+  
+#Dry Well
+drill_prices_3$well_per_diff <- lag((lead(drill_prices_3$`Dry Well Cost (Thousands)`)-drill_prices_3$`Dry Well Cost (Thousands)`)/drill_prices_3$`Dry Well Cost (Thousands)`)
+
+hist(drill_prices_3$gas_per_diff)
+
+#Means and SD
+#Crude Oil
+mean(drill_prices_3$crude_per_diff, na.rm = TRUE) #0.1442
+sd(drill_prices_3$crude_per_diff, na.rm = TRUE) #0.1801
+
+#Natural Gas
+mean(drill_prices_3$gas_per_diff, na.rm = TRUE) #0.1001
+sd(drill_prices_3$gas_per_diff, na.rm = TRUE) #0.1695
+
+#Dry Well
+mean(drill_prices_3$well_per_diff, na.rm = TRUE) #0.1389
+sd(drill_prices_3$well_per_diff, na.rm = TRUE) #0.1799
+
+#Combine all values into one column
+#Build new data frame with just the percent differences
+differences <- drill_prices_3%>%
+  select(c(well_per_diff, crude_per_diff, gas_per_diff))
+View(differences)
+
+#Need to append columns to form one column
+differences_aggregate <- gather(differences, na.rm=TRUE)
+View(differences_aggregate)
+
+#Create costs dataframe to show only the costs 
+costs <- drill_prices_3%>%
+  select(c(Year, `Dry Well Cost (Thousands)`, `Natural Gas Cost (Thousands)`, `Crude Oil Cost (Thousands)`))
+
+#Take average price for each year
+View(costs)
+
+#Create Histogram
+hist(differences_aggregate$value)
+#looks pretty Normal to me :)
+
+
+#Should 2006-2012 be a normal distribution?
+#let's see how normal the 1990-2006 distribution is
+mean(differences_aggregate$value) #0.1277
+sd(differences_aggregate$value) #0.1741
+kurtosis(differences_aggregate$value) #-0.0789
+skewness(differences_aggregate$value) #0.2114987
+qqnorm(differences_aggregate$value)
+qqline(differences_aggregate$value, col='red')
+#This looks to be a normal distribution, so we will create a probability distribution 
+#with mean 0.1277 and sd 0.1741 to simulate. 
+
+
+#Set the seed
+set.seed(11939)
+r <- rnorm(10000, mean=0.1277, sd=0.1741)
+
+
+#Let's just look at Crude Oil for now...
+P2006 <- 2664.6
+P2007 <- P2006*(1+r)
+
+mean(P2007)
+sd(P2007)
+
+hist(P2007, breaks=50, main='One Year Value Distribution', xlab='Final Value')
+abline(v = 2664.6, col="red", lwd=2)
+mtext("Initial Inv.", at=2664.6, col="red")
+
+Density.P2007 <- density(P2007, bw="SJ-ste") #this is not the default in R, but is a good choice
+Density.P2007
+#Bandwidth = 74.62
+
+# Use bandwidth from the density function above and input for h
+Est.P2007 <- rkde(fhat=kde(P1, h=74.62), n=10000) #What's n?
+hist(Est.P2007, breaks=50, main='Estimated One Year Value Distribution', xlab='Final Value')
+mean(Est.P2007)
+sd(Est.P2007)
+# 
+# # Multiple Input Probability Distributions #
+library(EnvStats)
+
+#Dry Well
+#Repeat 10000 times
+Prep1 <- rep(0,10000)
+
+for(i in 0:10000){
+  #Initialize Pt
+  Pt <- 2664.6
+  
+  #Simulate Pt to get predictions for 2019
+  for(j in 1:6){
+    Pt
+    r <- rnorm(n=1, mean=0.1277, sd=0.1741)
+    Pt <- Pt*(1 + r)
+  }
+  for(k in 1:3){
+    Pt
+    r <- rtri(n=1, min=-0.22, max=-0.07, mode=-0.0917)
+    Pt <- Pt*(1+r)
+  }
+  for (l in 1:4) {
+    Pt
+    r <- rtri(n=1, min=0.02, max=0.06, mode=0.05)
+    Pt <- Pt*(1+r)
+  }
+  Prep1[i] <- Pt
+}
+
+
+mean(Prep1)
+sd(Prep1)
+
+hist(Prep1, breaks=50, main='13 Year Value Distribution-Dry Well', xlab='Final Value')
+abline(v = 2664.6, col="red", lwd=2)
+mtext("Initial Inv.", at=2664.6, col="red")
+
+# View(Prep)
+
+#Natural Gas
+#Repeat 10000 times
+Prep2 <- rep(0,10000)
+
+for(i in 0:10000){
+  #Initialize Pt
+  Pt <- 1936.20
+  
+  #Simulate Pt to get predictions for 2019
+  for(j in 1:6){
+    Pt
+    r <- rnorm(n=1, mean=0.1277, sd=0.1741)
+    Pt <- Pt*(1 + r)
+  }
+  for(k in 1:3){
+    Pt
+    r <- rtri(n=1, min=-0.22, max=-0.07, mode=-0.0917)
+    Pt <- Pt*(1+r)
+  }
+  for (l in 1:4) {
+    Pt
+    r <- rtri(n=1, min=0.02, max=0.06, mode=0.05)
+    Pt <- Pt*(1+r)
+  }
+  Prep2[i] <- Pt
+}
+
+
+mean(Prep2)
+sd(Prep2)
+
+hist(Prep2, breaks=50, main='13 Year Value Distribution-Natural Gas', xlab='Final Value')
+abline(v = 1936.2, col="red", lwd=2)
+mtext("Initial Inv.", at=1936.2, col="red")
+
+
+#Crude Oil
+#Repeat 10000 times
+Prep3 <- rep(0,10000)
+
+for(i in 0:10000){
+  #Initialize Pt
+  Pt <- 2238.6
+  
+  #Simulate Pt to get predictions for 2019
+  for(j in 1:6){
+    Pt
+    r <- rnorm(n=1, mean=0.1277, sd=0.1741)
+    Pt <- Pt*(1 + r)
+  }
+  for(k in 1:3){
+    Pt
+    r <- rtri(n=1, min=-0.22, max=-0.07, mode=-0.0917)
+    Pt <- Pt*(1+r)
+  }
+  for (l in 1:4) {
+    Pt
+    r <- rtri(n=1, min=0.02, max=0.06, mode=0.05)
+    Pt <- Pt*(1+r)
+  }
+  Prep3[i] <- Pt
+}
+
+
+mean(Prep3)
+sd(Prep3)
+
+hist(Prep3, breaks=50, main='13 Year Value Distribution-Crude Oil', xlab='Final Value')
+abline(v = 2238.6, col="red", lwd=2)
+mtext("Initial Inv.", at=2238.6, col="red")
+
